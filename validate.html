@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validate — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+  <div class="topbar">
+    <div><span class="topbar-title">Validate</span><span class="topbar-sub">Run validation rules on extracted data</span></div>
+  </div>
+  <div class="page-body">
+    <div class="grid-2">
+
+      <!-- Form -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <div><div class="card-title">Validate Invoice</div><div class="card-subtitle">Run business rules &amp; data checks</div></div>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Invoice ID</label>
+              <input class="form-input form-input mono" id="invId" placeholder="inv_xxxxxxxx" />
+              <div class="form-hint">ID returned after analyzing an invoice.</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="runValidate()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Run Validation
+              </button>
+              <button class="btn btn-outline" onclick="pickFromList()">Pick from List</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rules -->
+        <div class="card" id="rulesCard" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">Validation Results</div>
+            <span class="badge badge-gray" id="ruleScore" style="margin-left:auto;"></span>
+          </div>
+          <div class="card-body">
+            <div id="ruleList" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Response -->
+      <div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">API Response</div></div>
+          <div id="respArea">
+            <div class="empty-state" style="padding:32px;">
+              <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+              <div class="empty-title">No results yet</div>
+              <div class="empty-desc">Enter an Invoice ID and run validation.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script src="shared.js"></script>
+<script>
+// Pre-fill from URL param
+const p = new URLSearchParams(location.search);
+if (p.get('id')) document.getElementById('invId').value = p.get('id');
+
+async function runValidate() {
+  const id = document.getElementById('invId').value.trim();
+  if (!id) { toast('Enter an Invoice ID','warn'); return; }
+  document.getElementById('respArea').innerHTML = '<div style="padding:20px;display:flex;gap:12px;align-items:center;"><div class="spinner"></div><span>Validating…</span></div>';
+  try {
+    const r = await api('POST', '/api/invoices/validate', { invoiceId: id });
+    if (!r.ok) { toast('Failed: '+r.status,'err'); return; }
+    const data = await r.json();
+    renderJson('respArea', data);
+
+    const rules = data.rules || data.checks || data.validations || [];
+    if (rules.length) {
+      const passed = rules.filter(r => r.passed || r.status==='pass').length;
+      document.getElementById('ruleScore').textContent = passed + '/' + rules.length + ' passed';
+      document.getElementById('ruleScore').className   = 'badge ' + (passed===rules.length ? 'badge-green' : passed>0 ? 'badge-amber' : 'badge-red');
+      document.getElementById('ruleList').innerHTML = rules.map(rule => {
+        const ok   = rule.passed || rule.status === 'pass';
+        const warn = rule.status === 'warn';
+        const cls  = ok ? 'green' : warn ? 'amber' : 'red';
+        const icon = ok
+          ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
+          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:var(--c-${cls}-lt);color:${ok?'#065f46':warn?'#78350f':'#991b1b'};">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;">${ok?'<polyline points="20 6 9 17 4 12"/>':'<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'}</svg>
+          <span><strong>${rule.name||rule.rule||'Rule'}</strong>${rule.message ? ': '+rule.message : ''}</span>
+        </div>`;
+      }).join('');
+      document.getElementById('rulesCard').style.display = 'block';
+    }
+    toast('Validation complete', 'ok');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function pickFromList() {
+  try {
+    const r = await api('GET', '/api/invoices');
+    if (!r.ok) return;
+    const d = await r.json();
+    const invs = Array.isArray(d) ? d : (d.invoices||d.items||d.data||[]);
+    if (invs.length) {
+      document.getElementById('invId').value = invs[0].id || invs[0]._id || '';
+      toast('Prefilled with latest invoice', 'ok');
+    } else toast('No invoices found','warn');
+  } catch {}
+}
+</script>
+</body>
+</html>

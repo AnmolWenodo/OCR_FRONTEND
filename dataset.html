@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dataset — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+  <div class="topbar">
+    <div><span class="topbar-title">Training Dataset</span><span class="topbar-sub">Annotated documents for model training</span></div>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="load()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="doExport()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export to Blob
+      </button>
+    </div>
+  </div>
+  <div class="page-body">
+    <div class="stats-grid stats-3 mb-20">
+      <div class="stat-card blue" ><div class="stat-label">Total Documents</div><div class="stat-value" id="s-total">—</div><div class="stat-meta">in dataset</div></div>
+      <div class="stat-card green"><div class="stat-label">Labeled</div><div class="stat-value" id="s-labeled">—</div><div class="stat-meta">annotated docs</div></div>
+      <div class="stat-card amber"><div class="stat-label">Annotations</div><div class="stat-value" id="s-ann">—</div><div class="stat-meta">total labels</div></div>
+    </div>
+
+    <div class="grid-2" style="align-items:start;">
+      <div class="card">
+        <div class="card-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          <div class="card-title">Documents</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Document</th><th>Annotations</th><th>Labels</th><th>Status</th><th></th></tr></thead>
+            <tbody id="tbody">
+              <tr><td colspan="5"><div class="empty-state" style="padding:32px;"><div class="empty-title">Click Refresh</div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Export Response</div></div>
+        <div id="exportResp">
+          <div class="empty-state" style="padding:28px;"><div class="empty-title">Click Export to Blob</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script src="shared.js"></script>
+<script>
+async function load() {
+  try {
+    const r = await api('GET', '/api/training/dataset');
+    if (!r.ok) { toast('Failed: '+r.status,'err'); return; }
+    const d = await r.json();
+    const docs = d.documents||d.items||d.data||(Array.isArray(d)?d:[]);
+    const labeled = docs.filter(x=>(x.annotationCount||0)>0).length;
+    const total   = docs.reduce((s,x)=>s+(x.annotationCount||0),0);
+    document.getElementById('s-total').textContent   = docs.length;
+    document.getElementById('s-labeled').textContent = labeled;
+    document.getElementById('s-ann').textContent     = total;
+    document.getElementById('tbody').innerHTML = docs.length
+      ? docs.map(doc => {
+          const id  = doc.id||doc._id||'';
+          const nm  = doc.fileName||doc.name||id.slice(0,16);
+          const ann = doc.annotationCount||0;
+          const lbs = (doc.labels||doc.annotationLabels||[]).join(', ')||'—';
+          return `<tr>
+            <td><div style="font-weight:550;">${nm}</div><div style="font-size:10.5px;font-family:monospace;color:var(--c-ink3);">${id.slice(0,20)}</div></td>
+            <td><span class="badge badge-blue">${ann}</span></td>
+            <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--c-ink3);">${lbs}</td>
+            <td>${statusBadge(ann>0?'labeled':'pending')}</td>
+            <td><a href="feedback.html?id=${id}" class="btn btn-ghost btn-sm">Annotate</a></td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="5"><div class="empty-state" style="padding:28px;"><div class="empty-title">Dataset is empty</div><div class="empty-desc">Analyze and label invoices first.</div></div></td></tr>';
+    toast(`${docs.length} document(s) loaded`, 'ok');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function doExport() {
+  toast('Exporting to blob…');
+  try {
+    const r = await api('POST', '/api/training/export');
+    const d = await r.json().catch(()=>({}));
+    renderJson('exportResp', d);
+    if (r.ok) toast('Export complete','ok'); else toast('Export failed: '+r.status,'err');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+load();
+</script>
+</body>
+</html>

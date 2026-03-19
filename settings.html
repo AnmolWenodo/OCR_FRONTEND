@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  .form-row   { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  @media(max-width:700px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+
+  <div class="topbar">
+    <div>
+      <span class="topbar-title">Settings</span>
+      <span class="topbar-sub">Email &amp; IMAP Configuration</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="getImapConfig()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Sync Config
+      </button>
+    </div>
+  </div>
+
+  <div class="page-body">
+    <div style="max-width:860px;">
+
+      <!-- IMAP Config Card -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <div>
+            <div class="card-title">IMAP Email Configuration</div>
+            <div class="card-subtitle">Configure mailbox ingestion for automatic invoice import</div>
+          </div>
+        </div>
+        <div class="card-body">
+
+          <!-- Credentials -->
+          <div class="form-row" style="margin-bottom:14px;">
+            <div class="form-group">
+              <label class="form-label">Email Address</label>
+              <input class="form-input" id="imap-username" value="anmolwork98@gmail.com" placeholder="you@gmail.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">App Password</label>
+              <input class="form-input" type="password" id="imap-password" placeholder="•••• •••• •••• ••••">
+            </div>
+          </div>
+
+          <!-- Server settings -->
+          <div class="form-row-3" style="margin-bottom:14px;">
+            <div class="form-group">
+              <label class="form-label">IMAP Host</label>
+              <input class="form-input form-input mono" id="imap-host" value="imap.gmail.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Port</label>
+              <input class="form-input form-input mono" id="imap-port" type="number" value="993">
+            </div>
+            <div class="form-group">
+              <label class="form-label">IMAP Type</label>
+              <select class="form-select" id="imap-type">
+                <option value="1">Invoices</option>
+                <option value="2">Statements</option>
+                <option value="3">Expenses</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- TO Alias -->
+          <div class="form-group" style="margin-bottom:14px;">
+            <label class="form-label">TO (Email Alias)</label>
+            <input class="form-input" id="to_alias" placeholder="e.g. invoices@yourdomain.com" type="email">
+            <div class="form-hint">Used to route incoming emails (optional)</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Customer / Entity / Branch cascade -->
+          <div style="font-size:13px;font-weight:700;color:var(--c-ink);margin-bottom:12px;">Entity Mapping</div>
+          <div class="form-row-3" style="margin-bottom:14px;">
+            <div class="form-group">
+              <label class="form-label">Customer</label>
+              <select class="form-select" id="imap-customerId">
+                <option value="">Loading customers…</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Entity</label>
+              <select class="form-select" id="imap-entityId">
+                <option value="">Select Customer first</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Branch</label>
+              <select class="form-select" id="imap-branchId">
+                <option value="">Select Entity first</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Running toggle -->
+          <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--c-bg);border-radius:var(--c-radius,8px);border:1px solid var(--c-border);">
+            <input type="checkbox" id="imap-isRunning" style="width:18px;height:18px;cursor:pointer;">
+            <label for="imap-isRunning" style="font-size:13.5px;font-weight:600;cursor:pointer;color:var(--c-ink);">Enable Background Service</label>
+            <span style="font-size:12px;color:var(--c-ink3);margin-left:4px;">Automatically fetch and process new emails</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button class="btn btn-primary" onclick="saveImapConfig()" id="saveImapBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save IMAP Settings
+          </button>
+          <button class="btn btn-outline" onclick="getImapConfig()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Load Saved Config
+          </button>
+        </div>
+      </div>
+
+      <!-- Config result / list -->
+      <div id="imapConfigResult"></div>
+
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+let imapChangeTimer = null;
+
+function onImapFilterChange() {
+  if (imapChangeTimer) clearTimeout(imapChangeTimer);
+  imapChangeTimer = setTimeout(() => {
+    const cid = document.getElementById('imap-customerId').value;
+    const eid = document.getElementById('imap-entityId').value;
+    const bid = document.getElementById('imap-branchId').value;
+    if (cid && eid && bid) getImapConfig();
+  }, 400);
+}
+
+// ── Cascade: Customer → Entity → Branch → Config ─────────
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCustomers('imap-customerId');
+
+  document.getElementById('imap-customerId').addEventListener('change', async (e) => {
+    await loadEntities(e.target.value, 'imap-entityId', 'imap-branchId');
+  });
+
+  document.getElementById('imap-entityId').addEventListener('change', async (e) => {
+    await loadBranches(e.target.value, 'imap-branchId');
+    onImapFilterChange();
+  });
+
+  document.getElementById('imap-branchId').addEventListener('change', () => {
+    onImapFilterChange();
+  });
+
+  // Try to load config on page open if IDs already set
+  getImapConfig();
+});
+</script>
+</body>
+</html>

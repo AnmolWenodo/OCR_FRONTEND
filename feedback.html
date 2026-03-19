@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feedback — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+  <div class="topbar">
+    <div><span class="topbar-title">Feedback</span><span class="topbar-sub">Correct extracted fields to improve model accuracy</span></div>
+  </div>
+  <div class="page-body">
+    <div class="grid-2" style="align-items:start;">
+
+      <div class="card">
+        <div class="card-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <div><div class="card-title">Submit Correction</div><div class="card-subtitle">POST /api/invoices/:id/feedback</div></div>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Invoice ID</label>
+            <input class="form-input form-input mono" id="fb-id" placeholder="inv_xxxxxxxx">
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label">Corrected By</label>
+              <input class="form-input" id="fb-by" placeholder="accountant@company.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <input class="form-input" id="fb-notes" placeholder="e.g. Fixed invoice number">
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div style="font-size:13px;font-weight:700;color:var(--c-ink);margin-bottom:10px;">Corrected Fields</div>
+          <div id="fbFields" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="fb-row" style="display:grid;grid-template-columns:1fr 1fr 32px;gap:8px;align-items:center;">
+              <input class="form-input form-input mono" placeholder="fieldName">
+              <input class="form-input" placeholder="corrected value">
+              <button onclick="removeRow(this)" style="width:32px;height:32px;border:1px solid var(--c-border);border-radius:6px;background:transparent;cursor:pointer;color:var(--c-red);font-size:14px;">✕</button>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="addRow()" style="margin-top:10px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Field
+          </button>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-primary" onclick="submitFeedback()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Submit Feedback
+          </button>
+        </div>
+      </div>
+
+      <!-- Annotations panel -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <div><div class="card-title">Training Annotations</div><div class="card-subtitle">POST /api/invoices/:id/training-annotations</div></div>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Invoice ID</label>
+              <input class="form-input form-input mono" id="ann-id" placeholder="inv_xxxxxxxx">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Label</label>
+              <input class="form-input" id="ann-label" placeholder="InvoiceNumber">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Value</label>
+              <input class="form-input" id="ann-value" placeholder="INV-15981">
+            </div>
+            <div class="form-row-2">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Source Type</label>
+                <select class="form-select" id="ann-source">
+                  <option value="field">field</option>
+                  <option value="rawText">rawText</option>
+                  <option value="lineItem">lineItem</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Page Number</label>
+                <input class="form-input" id="ann-page" type="number" value="1" min="1">
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-blue" onclick="submitAnnotation()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Add Annotation
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">Response</div></div>
+          <div id="respArea">
+            <div class="empty-state" style="padding:28px;"><div class="empty-title">No submission yet</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script src="shared.js"></script>
+<script>
+// Pre-fill from URL
+const p = new URLSearchParams(location.search);
+if (p.get('id')) { document.getElementById('fb-id').value = p.get('id'); document.getElementById('ann-id').value = p.get('id'); }
+
+function addRow() {
+  const c = document.getElementById('fbFields');
+  const d = document.createElement('div');
+  d.className = 'fb-row';
+  d.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 32px;gap:8px;align-items:center;';
+  d.innerHTML = `<input class="form-input form-input mono" placeholder="fieldName"><input class="form-input" placeholder="corrected value"><button onclick="removeRow(this)" style="width:32px;height:32px;border:1px solid var(--c-border);border-radius:6px;background:transparent;cursor:pointer;color:var(--c-red);font-size:14px;">✕</button>`;
+  c.appendChild(d);
+}
+function removeRow(btn) { const rows=document.querySelectorAll('.fb-row'); if(rows.length>1) btn.closest('.fb-row').remove(); }
+
+async function submitFeedback() {
+  const id = document.getElementById('fb-id').value.trim();
+  if (!id) { toast('Invoice ID required','warn'); return; }
+  const correctedData = {};
+  document.querySelectorAll('.fb-row').forEach(row => {
+    const ins = row.querySelectorAll('input');
+    const k = ins[0].value.trim(); const v = ins[1].value.trim();
+    if (k && v) correctedData[k] = { value: v, confidence: 1 };
+  });
+  try {
+    const r = await api('POST', `/api/invoices/${id}/feedback`, {
+      correctedBy: document.getElementById('fb-by').value.trim() || 'reviewer',
+      notes:       document.getElementById('fb-notes').value.trim(),
+      correctedData
+    });
+    const d = await r.json().catch(()=>({}));
+    renderJson('respArea', d);
+    if (r.ok) toast('Feedback submitted','ok'); else toast('Failed: '+r.status,'err');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function submitAnnotation() {
+  const id = document.getElementById('ann-id').value.trim();
+  if (!id) { toast('Invoice ID required','warn'); return; }
+  const ann = {
+    label:      document.getElementById('ann-label').value.trim(),
+    value:      document.getElementById('ann-value').value.trim(),
+    sourceType: document.getElementById('ann-source').value,
+    pageNumber: +document.getElementById('ann-page').value || 1,
+  };
+  if (!ann.label) { toast('Label required','warn'); return; }
+  try {
+    const r = await api('POST', `/api/invoices/${id}/training-annotations`, { annotations: [ann] });
+    const d = await r.json().catch(()=>({}));
+    renderJson('respArea', d);
+    if (r.ok) toast('Annotation added','ok'); else toast('Failed: '+r.status,'err');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+</script>
+</body>
+</html>

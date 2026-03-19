@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Build Model — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+  <div class="topbar">
+    <div><span class="topbar-title">Build Model</span><span class="topbar-sub">Train a custom document intelligence model</span></div>
+  </div>
+  <div class="page-body">
+    <div class="grid-2" style="align-items:start;">
+
+      <!-- Config form -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <div><div class="card-title">Model Configuration</div><div class="card-subtitle">POST /api/training/build-model</div></div>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Model ID</label>
+              <input class="form-input form-input mono" id="t-modelId" value="invoices-v1" placeholder="invoices-v1">
+              <div class="form-hint">Unique identifier for your model</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Azure Blob Container URL (with SAS token)</label>
+              <input class="form-input form-input mono" id="t-container" placeholder="https://account.blob.core.windows.net/container?sas=...">
+              <div class="form-hint">Exported dataset container URL</div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Description</label>
+                <input class="form-input" id="t-desc" value="Invoice custom model">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Build Mode</label>
+                <select class="form-select" id="t-mode">
+                  <option value="neural">neural</option>
+                  <option value="template">template</option>
+                  <option value="generative">generative</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-primary" onclick="buildModel()" id="buildBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Start Training
+            </button>
+          </div>
+        </div>
+
+        <!-- Status card -->
+        <div class="card" id="statusCard" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">Training Status</div>
+            <span class="badge badge-blue" id="statusBadge" style="margin-left:auto;">Running</span>
+          </div>
+          <div class="card-body">
+            <div id="statusTimeline" style="display:flex;flex-direction:column;gap:16px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guide + response -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div class="card-title">Training Guide</div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:16px;">
+              <div style="display:flex;gap:12px;align-items:flex-start;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--c-green-lt);color:var(--c-green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">✓</div>
+                <div><div style="font-size:13px;font-weight:600;color:var(--c-ink);">1. Analyze invoices</div><div style="font-size:12px;color:var(--c-ink3);margin-top:2px;">Process documents through the Analyze endpoint</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--c-green-lt);color:var(--c-green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">✓</div>
+                <div><div style="font-size:13px;font-weight:600;color:var(--c-ink);">2. Add training annotations</div><div style="font-size:12px;color:var(--c-ink3);margin-top:2px;">Label fields on each invoice via the Feedback page</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--c-blue-lt);color:var(--c-blue);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">→</div>
+                <div><div style="font-size:13px;font-weight:600;color:var(--c-ink);">3. Export dataset</div><div style="font-size:12px;color:var(--c-ink3);margin-top:2px;">Export annotated data to Azure Blob (<a href="dataset.html" style="color:var(--c-blue);">Dataset tab</a>)</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--c-bg);border:1px solid var(--c-border);color:var(--c-ink4);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">4</div>
+                <div><div style="font-size:13px;font-weight:600;color:var(--c-ink);">4. Build model</div><div style="font-size:12px;color:var(--c-ink3);margin-top:2px;">Fill in the form and click Start Training</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--c-bg);border:1px solid var(--c-border);color:var(--c-ink4);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">5</div>
+                <div><div style="font-size:13px;font-weight:600;color:var(--c-ink);">5. Test model</div><div style="font-size:12px;color:var(--c-ink3);margin-top:2px;">Use the <a href="models.html" style="color:var(--c-blue);">Models page</a> to test on new invoices</div></div>
+              </div>
+            </div>
+            <div class="highlight" style="margin-top:16px;font-size:12.5px;">
+              <strong>Tip:</strong> Use at least 5 labeled documents. <code style="background:rgba(37,99,235,.1);padding:1px 5px;border-radius:3px;font-size:11px;">neural</code> mode gives the best accuracy for variable-layout invoices.
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">API Response</div></div>
+          <div id="respArea"><div class="empty-state" style="padding:28px;"><div class="empty-title">No response yet</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script src="shared.js"></script>
+<script>
+async function buildModel() {
+  const modelId  = document.getElementById('t-modelId').value.trim();
+  const url      = document.getElementById('t-container').value.trim();
+  const desc     = document.getElementById('t-desc').value.trim();
+  const mode     = document.getElementById('t-mode').value;
+  if (!modelId) { toast('Model ID required','warn'); return; }
+  if (!url)     { toast('Container URL required','warn'); return; }
+
+  const btn = document.getElementById('buildBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:13px;height:13px;border-width:2px;"></span>&nbsp;Starting…';
+
+  document.getElementById('statusCard').style.display = 'block';
+  document.getElementById('statusBadge').textContent  = 'Submitting';
+  document.getElementById('statusBadge').className    = 'badge badge-blue';
+  document.getElementById('statusTimeline').innerHTML = stepHtml('active', 'Submitting training job…', `Model: ${modelId} · Mode: ${mode}`);
+
+  try {
+    const r = await api('POST', '/api/training/build-model', { modelId, containerUrl: url, description: desc, buildMode: mode });
+    const d = await r.json().catch(()=>({}));
+    renderJson('respArea', d);
+
+    if (r.ok || r.status===201 || r.status===202) {
+      document.getElementById('statusBadge').textContent = 'Started';
+      document.getElementById('statusBadge').className   = 'badge badge-green';
+      document.getElementById('statusTimeline').innerHTML =
+        stepHtml('done', 'Job submitted', `ID: ${modelId}`) +
+        stepHtml('active', 'Training in progress…', 'May take several minutes') +
+        stepHtml('wait',  'Deployment', 'Ready once training completes');
+      toast('Training job started for ' + modelId, 'ok');
+    } else {
+      document.getElementById('statusBadge').textContent = 'Failed';
+      document.getElementById('statusBadge').className   = 'badge badge-red';
+      document.getElementById('statusTimeline').innerHTML = stepHtml('err', 'Failed: HTTP ' + r.status, d.message||'');
+      toast('Training failed: '+r.status,'err');
+    }
+  } catch(e) {
+    document.getElementById('statusBadge').textContent = 'Error';
+    document.getElementById('statusBadge').className   = 'badge badge-red';
+    toast('Error: '+e.message,'err');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Start Training';
+}
+
+function stepHtml(type, title, sub) {
+  const colors = { done:'var(--c-green-lt)',active:'var(--c-blue-lt)',wait:'var(--c-bg)',err:'var(--c-red-lt)' };
+  const icons  = { done:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>', active:'<span class="spinner" style="width:12px;height:12px;border-width:2px;"></span>', wait:'', err:'✕' };
+  const c = { done:'var(--c-green)',active:'var(--c-blue)',wait:'var(--c-ink4)',err:'var(--c-red)' };
+  return `<div style="display:flex;gap:12px;align-items:flex-start;">
+    <div style="width:28px;height:28px;border-radius:50%;background:${colors[type]};color:${c[type]};display:flex;align-items:center;justify-content:center;flex-shrink:0;">${icons[type]}</div>
+    <div style="padding-top:4px;"><div style="font-size:13px;font-weight:600;color:var(--c-ink);">${title}</div><div style="font-size:12px;color:var(--c-ink3);margin-top:1px;">${sub}</div></div>
+  </div>`;
+}
+</script>
+</body>
+</html>

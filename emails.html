@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email Invoice Status — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+
+  <div class="topbar">
+    <div>
+      <span class="topbar-title">Email Invoice Status</span>
+      <span class="topbar-sub">Track upload status of email-sourced invoices</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="checkAttachments()">Check Attachments</button>
+      <button class="btn btn-outline btn-sm" onclick="importAttachments()">Import Attachments</button>
+      <button class="btn btn-primary btn-sm" onclick="processAll()">⚡ Process All</button>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- Stats Row -->
+    <div class="stats-grid stats-3 mb-20">
+      <div class="stat-card blue">
+        <div class="stat-label">Total Emails</div>
+        <div class="stat-value" id="em-total">—</div>
+        <div class="stat-meta">records fetched</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value" id="em-unprocessed">—</div>
+        <div class="stat-meta">upload status = 0</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Queued / Uploaded</div>
+        <div class="stat-value" id="em-uploaded">—</div>
+        <div class="stat-meta">upload status = 1</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <!-- Filter bar -->
+      <div style="padding:14px 20px;border-bottom:1px solid var(--c-border);display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex:1;min-width:100px;">
+          <div class="form-label" style="margin-bottom:4px;">Customer ID</div>
+          <input class="form-input form-input mono" id="em-customerId" placeholder="e.g. 80" style="padding:7px 10px;">
+        </div>
+        <div style="flex:1;min-width:100px;">
+          <div class="form-label" style="margin-bottom:4px;">Entity ID</div>
+          <input class="form-input form-input mono" id="em-entityId" placeholder="e.g. 157" style="padding:7px 10px;">
+        </div>
+        <div style="flex:1;min-width:100px;">
+          <div class="form-label" style="margin-bottom:4px;">Branch ID</div>
+          <input class="form-input form-input mono" id="em-branchId" placeholder="e.g. 237" style="padding:7px 10px;">
+        </div>
+        <div style="flex:1;min-width:160px;">
+          <div class="form-label" style="margin-bottom:4px;">Search Subject</div>
+          <input class="form-input" id="em-search" placeholder="Filter by subject…" oninput="filterEmailTable()" style="padding:7px 10px;">
+        </div>
+        <button class="btn btn-primary" id="emailFetchBtn" onclick="loadEmails()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Fetch Status
+        </button>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:44px;">#</th>
+              <th>Email Subject</th>
+              <th>From</th>
+              <th style="width:100px;">Att. Type</th>
+              <th style="width:70px;">Count</th>
+              <th style="width:110px;">Status</th>
+              <th>Upload IDs</th>
+            </tr>
+          </thead>
+          <tbody id="emailMainBody">
+            <tr>
+              <td colspan="7" style="text-align:center;padding:48px;color:var(--c-ink3);font-size:13px;">
+                Enter Customer / Entity / Branch IDs and click <strong>Fetch Status</strong>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Actions response -->
+    <div id="emailActionResp" style="margin-top:16px;"></div>
+
+  </div>
+</div>
+</div>
+<script src="shared.js"></script>
+<script>
+const EM = { rows: [] };
+
+const UPLOAD_STATUS_MAP = {
+  0: { label: 'Pending',  badge: 'badge-amber' },
+  1: { label: 'Queued',   badge: 'badge-green' },
+  2: { label: 'Failed',   badge: 'badge-red'   },
+  3: { label: 'Skipped',  badge: 'badge-gray'  },
+};
+const ATT_TYPE_MAP = { 0: 'None', 1: 'Invoice', 2: 'Statement', 3: 'Expenses' };
+
+async function loadEmails() {
+  const btn   = document.getElementById('emailFetchBtn');
+  const tbody = document.getElementById('emailMainBody');
+  const query = {
+    customerId: parseInt(document.getElementById('em-customerId').value) || 0,
+    entityId:   parseInt(document.getElementById('em-entityId').value)   || 0,
+    branchId:   parseInt(document.getElementById('em-branchId').value)   || 0,
+  };
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:13px;height:13px;border-width:2px;"></span>&nbsp;Fetching…';
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr>`;
+
+  try {
+    const r    = await api('GET', '/api/emails/email-invoice-status', query);
+    const data = await r.json();
+
+    if (!r.ok) {
+      tbody.innerHTML = `<tr><td colspan="7" style="color:var(--c-red);text-align:center;padding:40px;">Error ${r.status}: ${data.message||''}</td></tr>`;
+      toast('Fetch failed: ' + r.status, 'err');
+      return;
+    }
+
+    EM.rows = data.data || data.items || (Array.isArray(data) ? data : []);
+    renderEmailTable(EM.rows);
+
+    // Update stats
+    document.getElementById('em-total').textContent       = EM.rows.length;
+    document.getElementById('em-uploaded').textContent    = EM.rows.filter(r => (r.UPLOAD_STATUS ?? r.uploadStatus) === 1).length;
+    document.getElementById('em-unprocessed').textContent = EM.rows.filter(r => (r.UPLOAD_STATUS ?? r.uploadStatus) === 0).length;
+
+    toast(`${EM.rows.length} record(s) loaded`, 'ok');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--c-red);text-align:center;padding:40px;">Error: ${e.message}</td></tr>`;
+    toast('Error: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Fetch Status';
+  }
+}
+
+function filterEmailTable() {
+  const q = document.getElementById('em-search').value.toLowerCase();
+  const filtered = EM.rows.filter(r =>
+    (r.EMAIL_SUBJECT || r.emailSubject || '').toLowerCase().includes(q) ||
+    (r.FROM || r.from || '').toLowerCase().includes(q)
+  );
+  renderEmailTable(filtered);
+}
+
+function renderEmailTable(rows) {
+  const tbody = document.getElementById('emailMainBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--c-ink3);">No records found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(row => {
+    const statusInfo = UPLOAD_STATUS_MAP[row.UPLOAD_STATUS ?? row.uploadStatus] || { label: '—', badge: 'badge-gray' };
+    const attType    = ATT_TYPE_MAP[row.ATTACHMENT_TYPE ?? row.attachmentType]  || '—';
+    const uid        = row.EMAIL_INVOICE_UPLOAD_STATUS_ID ?? row.id ?? '';
+    const subject    = row.EMAIL_SUBJECT || row.emailSubject || '(No Subject)';
+    const from       = row.FROM || row.from || '—';
+    const attCount   = row.ATTACHMENT_COUNT ?? row.attachmentCount ?? 0;
+    const uploadIds  = row.UPLOAD_IDS ?? row.uploadIds ?? 'null';
+    return `<tr>
+      <td class="td-mono" style="font-size:11.5px;">${uid}</td>
+      <td>
+        <div style="font-weight:600;color:var(--c-ink);">${subject}</div>
+        <div style="font-size:10.5px;font-family:monospace;color:var(--c-ink3);margin-top:2px;">${(row.EMAIL_UNIQUE_ID||'').slice(0,28)}</div>
+      </td>
+      <td style="font-size:12.5px;color:var(--c-ink3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${from}</td>
+      <td><span class="badge badge-gray">${attType}</span></td>
+      <td style="text-align:center;">${attCount}</td>
+      <td><span class="badge ${statusInfo.badge}">${statusInfo.label}</span></td>
+      <td class="td-mono" style="font-size:11px;color:var(--c-ink3);">${uploadIds}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function checkAttachments() {
+  toast('Checking for email attachments…');
+  try {
+    const r = await api('POST', '/api/invoices/check-email-attachments');
+    const d = await r.json().catch(()=>({}));
+    document.getElementById('emailActionResp').innerHTML = `<div class="card"><div class="card-header"><div class="card-title">check-email-attachments</div></div><div class="card-body" style="padding:0;"><div class="json-box"><div class="json-body">${jsonHL(d)}</div></div></div></div>`;
+    if (r.ok) { toast('Check complete', 'ok'); loadEmails(); }
+    else toast('Check failed: ' + r.status, 'err');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function importAttachments() {
+  toast('Importing email attachments…');
+  try {
+    const r = await api('POST', '/api/invoices/import-email-attachments');
+    const d = await r.json().catch(()=>({}));
+    document.getElementById('emailActionResp').innerHTML = `<div class="card"><div class="card-header"><div class="card-title">import-email-attachments</div></div><div class="card-body" style="padding:0;"><div class="json-box"><div class="json-body">${jsonHL(d)}</div></div></div></div>`;
+    if (r.ok) { toast('Import complete', 'ok'); loadEmails(); }
+    else toast('Import failed: ' + r.status, 'err');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function processAll() {
+  toast('Processing unprocessed invoices…');
+  try {
+    const r = await api('POST', '/api/invoices/process-unprocessed');
+    const d = await r.json().catch(()=>({}));
+    document.getElementById('emailActionResp').innerHTML = `<div class="card"><div class="card-header"><div class="card-title">process-unprocessed</div></div><div class="card-body" style="padding:0;"><div class="json-box"><div class="json-body">${jsonHL(d)}</div></div></div></div>`;
+    if (r.ok) { toast('Processing complete', 'ok'); loadEmails(); }
+    else toast('Processing failed: ' + r.status, 'err');
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+</script>
+</body>
+</html>

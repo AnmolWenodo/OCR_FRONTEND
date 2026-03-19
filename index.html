@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+
+  <div class="topbar">
+    <div>
+      <span class="topbar-title">Dashboard</span>
+      <span class="topbar-sub">Overview &amp; quick actions</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="loadAll()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+      <a href="analyze.html" class="btn btn-primary btn-sm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Invoice
+      </a>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- Hero -->
+    <div style="background:var(--c-ink);border-radius:14px;padding:26px 28px;margin-bottom:22px;display:flex;align-items:center;gap:20px;overflow:hidden;position:relative;">
+      <div style="position:absolute;right:-20px;top:-20px;width:180px;height:180px;background:rgba(255,255,255,.03);border-radius:50%;pointer-events:none;"></div>
+      <div style="position:absolute;right:40px;bottom:-50px;width:240px;height:240px;background:rgba(37,99,235,.1);border-radius:50%;pointer-events:none;"></div>
+      <div style="flex:1;position:relative;z-index:1;">
+        <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:6px;">Intelligent Invoice Processing</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.5);max-width:460px;line-height:1.6;">Extract, validate, and train on invoice data powered by document intelligence. Upload a file or connect your email inbox to begin.</div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <a href="analyze.html" class="btn btn-blue btn-sm">Analyze Invoice</a>
+          <a href="training.html" class="btn btn-sm" style="background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.15);">Build Model</a>
+        </div>
+      </div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:12px 16px;font-family:monospace;font-size:11px;color:rgba(255,255,255,.55);position:relative;z-index:1;">
+        <div style="color:rgba(255,255,255,.3);margin-bottom:4px;">POST /api/invoices/analyze</div>
+        <div>{ "fileUrl": "invoice.pdf" }</div>
+        <div style="margin-top:6px;color:rgba(255,255,255,.3);">→ 201 Created</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid stats-4">
+      <div class="stat-card blue">
+        <div class="stat-label">Total Invoices</div>
+        <div class="stat-value" id="s-invoices">—</div>
+        <div class="stat-meta">processed documents</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Emails</div>
+        <div class="stat-value" id="s-emails">—</div>
+        <div class="stat-meta">in mailbox</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Models</div>
+        <div class="stat-value" id="s-models">—</div>
+        <div class="stat-meta">custom trained</div>
+      </div>
+      <div class="stat-card violet">
+        <div class="stat-label">Dataset</div>
+        <div class="stat-value" id="s-dataset">—</div>
+        <div class="stat-meta">annotated samples</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+
+      <!-- Recent invoices -->
+      <div class="card">
+        <div class="card-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+          <div><div class="card-title">Recent Invoices</div></div>
+          <a href="invoices.html" class="btn btn-ghost btn-sm" style="margin-left:auto;">View all →</a>
+        </div>
+        <div id="recentList">
+          <div class="empty-state" style="padding:28px 16px;">
+            <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg></div>
+            <div class="empty-title">No invoices yet</div>
+            <div class="empty-desc">Analyze your first invoice to see it here.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick actions + system -->
+      <div class="flex flex-col gap-16">
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <div class="card-title">Quick Actions</div>
+          </div>
+          <div class="card-body" style="padding:12px;display:flex;flex-direction:column;gap:6px;">
+            <a href="analyze.html"  class="btn btn-outline w-full" style="justify-content:flex-start;">📄 Upload &amp; Analyze Invoice</a>
+            <a href="emails.html"   class="btn btn-outline w-full" style="justify-content:flex-start;">📧 Import Email Attachments</a>
+            <a href="validate.html" class="btn btn-outline w-full" style="justify-content:flex-start;">✅ Validate Invoice</a>
+            <a href="dataset.html"  class="btn btn-outline w-full" style="justify-content:flex-start;">📦 View Training Dataset</a>
+            <a href="training.html" class="btn btn-outline w-full" style="justify-content:flex-start;">⚡ Build Custom Model</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div class="card-title">System Health</div>
+          </div>
+          <div class="card-body" style="padding:14px;">
+            <div class="flex items-center gap-8 mb-16">
+              <div class="api-dot" id="dashDot"></div>
+              <span id="dashStatus" style="font-size:13px;font-weight:600;color:var(--c-ink2);">Unknown</span>
+              <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="checkHealth()">Check</button>
+            </div>
+            <div id="healthEndpoints" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+async function loadAll() {
+  checkHealth();
+  // Load invoices
+  try {
+    const r = await api('GET', '/api/invoices');
+    if (r.ok) {
+      const d = await r.json();
+      const invs = Array.isArray(d) ? d : (d.invoices || d.items || d.data || []);
+      document.getElementById('s-invoices').textContent = invs.length;
+      renderRecent(invs.slice(0, 6));
+    }
+  } catch {}
+
+  // Load emails
+  try {
+    const r = await api('GET', '/api/emails');
+    if (r.ok) {
+      const d = await r.json();
+      const emails = Array.isArray(d) ? d : (d.emails || d.data || d.items || []);
+      document.getElementById('s-emails').textContent = emails.length;
+    }
+  } catch {}
+
+  // Load models
+  try {
+    const r = await api('GET', '/api/training/models');
+    if (r.ok) {
+      const d = await r.json();
+      const models = Array.isArray(d) ? d : (d.models || d.items || []);
+      document.getElementById('s-models').textContent = models.length;
+    }
+  } catch {}
+
+  // Load dataset
+  try {
+    const r = await api('GET', '/api/training/dataset');
+    if (r.ok) {
+      const d = await r.json();
+      const docs = d.documents || d.items || d.data || [];
+      const total = docs.reduce((s, x) => s + (x.annotationCount || 0), 0);
+      document.getElementById('s-dataset').textContent = total;
+    }
+  } catch {}
+}
+
+function renderRecent(invs) {
+  const el = document.getElementById('recentList');
+  if (!invs.length) return;
+  el.innerHTML = invs.map(inv => {
+    const id   = inv.id || inv._id || '';
+    const name = inv.fileName || inv.name || 'Invoice';
+    const amt  = inv.totalAmount || inv.fields?.totalAmount?.value || '—';
+    const s    = inv.status || 'processed';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--c-border2);">
+      <div style="width:36px;height:36px;background:var(--c-bg);border:1px solid var(--c-border);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name}</div>
+        <div style="font-size:11px;color:var(--c-ink3);font-family:monospace;">${id.slice(0,20)}</div>
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--c-ink2);">${amt !== '—' ? amt : ''}</div>
+      ${statusBadge(s)}
+    </div>`;
+  }).join('');
+}
+
+async function checkHealth() {
+  const dot = document.getElementById('dashDot');
+  const txt = document.getElementById('dashStatus');
+  dot.className = 'api-dot loading';
+  txt.textContent = 'Checking…';
+  const endpoints = [
+    { label: 'GET /health', path: '/health' },
+    { label: 'GET /ready',  path: '/ready' }
+  ];
+  const results = [];
+  for (const ep of endpoints) {
+    try {
+      const r = await api('GET', ep.path);
+      results.push({ label: ep.label, ok: r.ok, code: r.status });
+    } catch {
+      results.push({ label: ep.label, ok: false, code: 'ERR' });
+    }
+  }
+  const allOk = results.every(r => r.ok);
+  dot.className = 'api-dot ' + (allOk ? 'ok' : 'err');
+  txt.textContent = allOk ? 'All systems operational' : 'Degraded';
+
+  document.getElementById('healthEndpoints').innerHTML = results.map(r =>
+    `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;">
+      <span style="width:8px;height:8px;border-radius:50%;background:${r.ok ? 'var(--c-green)' : 'var(--c-red)'};flex-shrink:0;"></span>
+      <span style="font-family:monospace;color:var(--c-ink2);">${r.label}</span>
+      <span style="margin-left:auto;${r.ok ? 'color:var(--c-green)' : 'color:var(--c-red)'};">${r.code}</span>
+    </div>`
+  ).join('');
+}
+
+loadAll();
+</script>
+</body>
+</html>

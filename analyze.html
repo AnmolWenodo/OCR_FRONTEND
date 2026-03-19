@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analyze Invoice — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* 3-pane result layout */
+  .result-layout { display:grid; grid-template-columns:1fr 380px; height:calc(100vh - 54px); overflow:hidden; }
+  .preview-pane  { border-right:1px solid var(--c-border); display:flex; flex-direction:column; background:#f0f1f5; overflow:hidden; }
+  .preview-topbar { padding:8px 14px; background:var(--c-white); border-bottom:1px solid var(--c-border); display:flex; align-items:center; gap:8px; flex-shrink:0; font-size:12.5px; }
+  .preview-scroll { flex:1; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:20px; }
+  .form-pane  { display:flex; flex-direction:column; overflow:hidden; background:var(--c-white); }
+  .form-tabs  { padding:0 14px; border-bottom:1px solid var(--c-border); flex-shrink:0; display:flex; gap:0; }
+  .form-tab   { padding:10px 14px; border:none; background:transparent; font-family:inherit; font-size:12.5px; font-weight:600; color:var(--c-ink3); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; transition:color .12s; }
+  .form-tab.active { color:var(--c-blue); border-bottom-color:var(--c-blue); }
+  .form-scroll { flex:1; overflow-y:auto; padding:14px; }
+  .ftab-panel  { display:none; }
+  .ftab-panel.active { display:block; }
+  .field-group-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--c-ink4); padding:12px 0 8px; display:flex; align-items:center; gap:8px; }
+  .field-group-label::after { content:''; flex:1; height:1px; background:var(--c-border2); }
+  .notice { display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--c-amber-lt);border:1px solid #fcd34d;border-radius:7px;margin-bottom:12px;font-size:12px;color:#78350f;display:none; }
+</style>
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+
+  <div class="topbar" id="topbarMain">
+    <div>
+      <span class="topbar-title">Analyze Invoice</span>
+      <span class="topbar-sub" id="topbarSub">Upload a document to extract fields</span>
+    </div>
+    <div class="topbar-right" id="topbarActions" style="display:none;">
+      <span class="badge badge-gray text-mono" id="topbarId" style="font-size:11px;"></span>
+      <button class="btn btn-outline btn-sm" onclick="resetPage()">✕ New Invoice</button>
+    </div>
+  </div>
+
+  <!-- ── UPLOAD STATE ── -->
+  <div id="uploadState" class="page-body">
+    <div style="max-width:600px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
+      <div class="card">
+        <div class="card-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div><div class="card-title">Upload Invoice</div><div class="card-subtitle">Drag &amp; drop or click to browse</div></div>
+        </div>
+        <div class="card-body">
+          <label class="upload-zone" id="dropZone" for="fileIn">
+            <input type="file" id="fileIn" accept=".pdf,.png,.jpg,.jpeg,.tiff" onchange="onFileSelect(event)">
+            <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+            <div class="upload-title" id="dropTitle">Drop invoice here or click to upload</div>
+            <div class="upload-sub" id="dropSub">PDF, PNG, JPG, TIFF supported</div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:10px;">
+              <span style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;font-family:monospace;">PDF</span>
+              <span style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;font-family:monospace;">PNG</span>
+              <span style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;font-family:monospace;">JPG</span>
+            </div>
+          </label>
+          <div class="divider"></div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Or provide a URL</label>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input" id="urlIn" placeholder="https://example.com/invoice.pdf" style="flex:1;">
+              <button class="btn btn-outline" onclick="analyzeUrl()">Analyze URL</button>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-primary" id="btnAnalyze" onclick="doAnalyze('/api/invoices/analyze')" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Analyze Invoice
+          </button>
+          <button class="btn btn-outline" id="btnAnalyzeVal" onclick="doAnalyze('/api/invoices/analyze-and-validate')" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Analyze + Validate
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div class="card" id="progressCard" style="display:none;">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+            <div class="spinner"></div>
+            <div>
+              <div style="font-weight:600;font-size:13.5px;" id="progressLabel">Processing…</div>
+              <div style="font-size:12px;color:var(--c-ink3);">This may take a few seconds</div>
+            </div>
+          </div>
+          <div class="progress"><div class="progress-fill" id="progressBar" style="width:15%;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RESULT STATE ── -->
+  <div id="resultState" style="display:none;">
+    <div class="result-layout">
+
+      <!-- Preview pane -->
+      <div class="preview-pane">
+        <div class="preview-topbar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+          <span id="prevFilename" style="font-weight:600;color:var(--c-ink2);">Document</span>
+          <span id="prevSize" class="badge badge-gray" style="font-size:10px;"></span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:4px;">
+            <button class="btn btn-ghost btn-sm" id="prevPgPrev" onclick="pdfPage(-1)" style="padding:3px 7px;" disabled>‹</button>
+            <span id="prevPgInfo" style="font-size:12px;color:var(--c-ink3);"></span>
+            <button class="btn btn-ghost btn-sm" id="prevPgNext" onclick="pdfPage(1)"  style="padding:3px 7px;" disabled>›</button>
+          </div>
+        </div>
+        <div class="preview-scroll">
+          <canvas id="prevCanvas" style="display:block;max-width:100%;box-shadow:var(--shadow-md);border-radius:3px;"></canvas>
+        </div>
+      </div>
+
+      <!-- Form pane -->
+      <div class="form-pane">
+        <div class="form-tabs">
+          <button class="form-tab active" id="ft-fields"    onclick="switchFTab('fields')">Fields</button>
+          <button class="form-tab"         id="ft-lineitems" onclick="switchFTab('lineitems')">Line Items</button>
+          <button class="form-tab"         id="ft-raw"       onclick="switchFTab('raw')">JSON</button>
+        </div>
+
+        <div class="form-scroll">
+          <!-- Fields -->
+          <div class="ftab-panel active" id="fpFields">
+            <div class="notice" id="editNotice">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Fields edited — save before deciding.
+            </div>
+            <div id="fieldsContainer"></div>
+          </div>
+          <!-- Line Items -->
+          <div class="ftab-panel" id="fpLineitems">
+            <div id="lineitemsContainer">
+              <div class="empty-state" style="padding:28px;"><div class="empty-title">No line items</div></div>
+            </div>
+          </div>
+          <!-- Raw JSON -->
+          <div class="ftab-panel" id="fpRaw">
+            <div id="rawContainer"></div>
+          </div>
+        </div>
+
+        <!-- Action bar -->
+        <div class="action-bar">
+          <div class="action-bar-label">Review Decision</div>
+          <div class="action-btns">
+            <button class="action-btn approve" onclick="decide('approve')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Approve
+            </button>
+            <button class="action-btn train" onclick="decide('train')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Train
+            </button>
+            <button class="action-btn reject" onclick="decide('reject')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Reject
+            </button>
+          </div>
+          <button onclick="saveEdits()" style="width:100%;padding:8px;border-radius:7px;border:1px solid var(--c-border);background:var(--c-bg);color:var(--c-ink2);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .12s;" onmouseover="this.style.background='var(--c-ink)';this.style.color='#fff';" onmouseout="this.style.background='var(--c-bg)';this.style.color='var(--c-ink2)';">
+            💾 Save Field Edits
+          </button>
+          <div class="status-bar" id="decisionBar"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+<script src="shared.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const AZ = { file: null, blobUrl: null, isPdf: false, pdfDoc: null, pdfPage: 1, data: null };
+
+const GROUPS = [
+  { label:'Vendor',   keys:['vendorName','vendorAddress'] },
+  { label:'Customer', keys:['customerName','shipToAddress'] },
+  { label:'Invoice',  keys:['invoiceNumber','purchaseOrder','invoiceDate','dueDate','paymentTerms'] },
+  { label:'Financial',keys:['subtotal','tax','totalAmount','currency','glAccount'] },
+  { label:'Other',    keys:[] }
+];
+const LABELS = { invoiceNumber:'Invoice Number',vendorName:'Vendor Name',vendorAddress:'Vendor Address',customerName:'Customer / Bill To',invoiceDate:'Invoice Date',dueDate:'Due Date',subtotal:'Subtotal',tax:'Tax Amount',totalAmount:'Total Amount',currency:'Currency',purchaseOrder:'PO Number',glAccount:'GL Account',paymentTerms:'Payment Terms' };
+
+// Drag & drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); setFile(e.dataTransfer.files[0]); });
+
+function onFileSelect(e) { setFile(e.target.files[0]); }
+function setFile(f) {
+  if (!f) return;
+  AZ.file    = f;
+  AZ.blobUrl = URL.createObjectURL(f);
+  AZ.isPdf   = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+  document.getElementById('dropTitle').textContent = f.name;
+  document.getElementById('dropSub').textContent   = (f.size/1024).toFixed(1) + ' KB · ' + f.type;
+  document.getElementById('btnAnalyze').disabled    = false;
+  document.getElementById('btnAnalyzeVal').disabled = false;
+  dz.style.borderColor = 'var(--c-blue)';
+  dz.style.background  = '#f0f6ff';
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progressBar').style.width  = pct + '%';
+  document.getElementById('progressLabel').textContent = label;
+}
+
+async function analyzeUrl() {
+  const url = document.getElementById('urlIn').value.trim();
+  if (!url) { toast('Enter a URL first', 'warn'); return; }
+  await doAnalyze('/api/invoices/analyze', true, url);
+}
+
+async function doAnalyze(endpoint, useUrl = false, fileUrl = '') {
+  const pc = document.getElementById('progressCard');
+  pc.style.display = 'block';
+  setProgress(15, 'Uploading document…');
+
+  try {
+    let res;
+    if (useUrl) {
+      res = await api('POST', endpoint, { fileUrl });
+    } else {
+      if (!AZ.file) { toast('Select a file first', 'warn'); return; }
+      const fd = new FormData();
+      fd.append('file', AZ.file);
+      setProgress(40, 'Sending to API…');
+      res = await api('POST', endpoint, fd, true);
+    }
+    setProgress(75, 'AI is reading document…');
+    await new Promise(r => setTimeout(r,300));
+    const raw = await res.json().catch(() => ({}));
+
+    if (res.ok || res.status === 201) {
+      setProgress(90, 'Fetching extracted data…');
+      const id = raw?.record?.id || raw?.id || raw?._id;
+      let full = raw;
+      if (id) {
+        try {
+          const r2 = await api('GET', `/api/invoices/${id}`);
+          if (r2.ok) full = { ...(await r2.json()), id };
+        } catch {}
+      }
+      setProgress(100, 'Done!');
+      setTimeout(() => { pc.style.display = 'none'; }, 600);
+
+      AZ.data = full;
+      showResult(full);
+      toast('Invoice analyzed', 'ok');
+
+      // If no fields from API, use Vision OCR fallback
+      const fields = extractFields(full);
+      if (!Object.keys(fields).length && AZ.blobUrl) {
+        setTimeout(() => visionFallback(full), 300);
+      }
+    } else {
+      pc.style.display = 'none';
+      toast('Failed: ' + res.status + ' — ' + (raw.message || ''), 'err');
+    }
+  } catch(e) {
+    document.getElementById('progressCard').style.display = 'none';
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+function showResult(data) {
+  document.getElementById('uploadState').style.display  = 'none';
+  document.getElementById('resultState').style.display  = 'block';
+  document.getElementById('topbarSub').textContent       = data.fileName || 'Invoice Analysis';
+  document.getElementById('topbarActions').style.display = 'flex';
+  document.getElementById('topbarId').textContent        = data.id ? data.id.slice(0,20) : '';
+
+  renderFields(data);
+  renderLineItems(data);
+  renderRaw(data);
+  loadPreview(data);
+}
+
+function renderFields(data) {
+  const fields  = extractFields(data);
+  const allKeys = Object.keys(fields);
+  const defined = new Set();
+  let html = '';
+
+  GROUPS.forEach(g => {
+    const gKeys = g.keys.length
+      ? g.keys.filter(k => fields[k])
+      : allKeys.filter(k => !GROUPS.flatMap(x=>x.keys).includes(k) && !defined.has(k));
+    if (!gKeys.length) return;
+    gKeys.forEach(k => defined.add(k));
+    html += `<div class="field-group-label">${g.label}</div>`;
+    gKeys.forEach(k => {
+      const { value, confidence } = fields[k];
+      const lbl = LABELS[k] || k.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase());
+      const pill = confPill(confidence);
+      html += `<div class="field-row">
+        <div class="field-key">${lbl}${pill ? '<br>'+pill : ''}</div>
+        <input class="field-input" id="fld-${k}" value="${String(value).replace(/"/g,'&quot;').replace(/</g,'&lt;')}" placeholder="Not extracted" oninput="markEdit(this)">
+      </div>`;
+    });
+  });
+  const rem = allKeys.filter(k => !defined.has(k));
+  if (rem.length) {
+    html += `<div class="field-group-label">Additional</div>`;
+    rem.forEach(k => {
+      const { value } = fields[k];
+      html += `<div class="field-row">
+        <div class="field-key">${k.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase())}</div>
+        <input class="field-input" id="fld-${k}" value="${String(value??'').replace(/"/g,'&quot;')}" oninput="markEdit(this)">
+      </div>`;
+    });
+  }
+  if (!allKeys.length) html = `<div style="padding:24px 0;text-align:center;color:var(--c-ink3);font-size:13px;"><div style="font-size:24px;margin-bottom:8px;">🔍</div>Extracting fields via Vision OCR…<br><small style="font-family:monospace;color:var(--c-ink4);">ID: ${data.id||'—'}</small></div>`;
+  document.getElementById('fieldsContainer').innerHTML = html;
+}
+
+function markEdit(inp) {
+  inp.classList.add('edited');
+  document.getElementById('editNotice').style.display = 'flex';
+}
+
+function renderLineItems(data) {
+  const items = data.lineItems || data.items || [];
+  const el = document.getElementById('lineitemsContainer');
+  if (!items.length) { el.innerHTML = '<div class="empty-state" style="padding:28px;"><div class="empty-title">No line items extracted</div></div>'; return; }
+  const keys = [...new Set(items.flatMap(r => Object.keys(r)))].filter(k => k !== '_id');
+  el.innerHTML = `<div class="table-wrap" style="border-radius:8px;border:1px solid var(--c-border);overflow:hidden;">
+    <table>
+      <thead><tr>${keys.map(k => `<th>${k}</th>`).join('')}</tr></thead>
+      <tbody>${items.map(row => `<tr>${keys.map(k => `<td><input style="width:100%;border:none;background:transparent;font-size:12px;font-family:inherit;color:var(--c-ink2);padding:2px 4px;outline:none;" value="${String(row[k]??'').replace(/"/g,'&quot;')}"></td>`).join('')}</tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderRaw(data) {
+  document.getElementById('rawContainer').innerHTML = `<div class="json-box">
+    <div class="json-box-header"><span class="json-box-label">API RESPONSE</span></div>
+    <div class="json-body">${jsonHL(data)}</div>
+  </div>`;
+}
+
+function switchFTab(name) {
+  ['fields','lineitems','raw'].forEach(t => {
+    document.getElementById('fp' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === name);
+    document.getElementById('ft-' + t).classList.toggle('active', t === name);
+  });
+}
+
+// ── Preview ────────────────────────────────────────────
+async function loadPreview(data) {
+  const name = data.fileName || AZ.file?.name || 'Document';
+  document.getElementById('prevFilename').textContent = name;
+  if (AZ.blobUrl) {
+    document.getElementById('prevSize').textContent = AZ.file ? (AZ.file.size/1024).toFixed(0)+' KB' : '';
+    if (AZ.isPdf) await renderPdf(AZ.blobUrl);
+    else          await renderImg(AZ.blobUrl);
+  } else if (data.id) {
+    try {
+      const r = await api('GET', `/api/invoices/${data.id}/source`);
+      if (r.ok) {
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        if (blob.type === 'application/pdf') await renderPdf(url);
+        else                                  await renderImg(url);
+      }
+    } catch {}
+  }
+}
+
+async function renderImg(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.getElementById('prevCanvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      res();
+    };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+async function renderPdf(url) {
+  AZ.pdfDoc  = await pdfjsLib.getDocument(url).promise;
+  AZ.pdfPage = 1;
+  await drawPdfPage(1);
+}
+
+async function drawPdfPage(n) {
+  const page = await AZ.pdfDoc.getPage(n);
+  const vp   = page.getViewport({ scale: 2 });
+  const c    = document.getElementById('prevCanvas');
+  c.width = vp.width; c.height = vp.height;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  const tot = AZ.pdfDoc.numPages;
+  document.getElementById('prevPgInfo').textContent = n + ' / ' + tot;
+  document.getElementById('prevPgPrev').disabled = n <= 1;
+  document.getElementById('prevPgNext').disabled = n >= tot;
+}
+
+async function pdfPage(d) {
+  if (!AZ.pdfDoc) return;
+  const n = Math.max(1, Math.min(AZ.pdfDoc.numPages, AZ.pdfPage + d));
+  if (n === AZ.pdfPage) return;
+  AZ.pdfPage = n;
+  await drawPdfPage(n);
+}
+
+// ── Vision OCR fallback ────────────────────────────────
+async function visionFallback(invoiceData) {
+  const container = document.getElementById('fieldsContainer');
+  container.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--c-blue-lt);border-radius:8px;margin-bottom:12px;font-size:13px;color:var(--c-blue-dk);">
+    <span class="spinner" style="border-top-color:var(--c-blue);"></span>Running Vision OCR to extract fields…</div>`;
+  try {
+    const canvas = document.getElementById('prevCanvas');
+    const off = document.createElement('canvas');
+    const scale = Math.min(1, 1200/canvas.width);
+    off.width  = Math.round(canvas.width  * scale);
+    off.height = Math.round(canvas.height * scale);
+    off.getContext('2d').drawImage(canvas, 0, 0, off.width, off.height);
+    const b64 = off.toDataURL('image/jpeg', .85).replace(/^data:image\/jpeg;base64,/, '');
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 1000,
+        messages: [{ role:'user', content:[
+          { type:'image', source:{ type:'base64', media_type:'image/jpeg', data:b64 } },
+          { type:'text', text:'Extract all invoice fields. Return ONLY valid JSON:\n{"invoiceNumber":"","vendorName":"","vendorAddress":"","customerName":"","invoiceDate":"","dueDate":"","paymentTerms":"","subtotal":"","tax":"","totalAmount":"","currency":"","purchaseOrder":"","glAccount":"","lineItems":[{"description":"","quantity":"","unitPrice":"","amount":""}]}\nNo markdown, no explanation.' }
+        ]}]
+      })
+    });
+    if (resp.ok) {
+      const ai = await resp.json();
+      let txt = (ai.content?.[0]?.text || '{}').replace(/```json?/g,'').replace(/```/g,'').trim();
+      const extracted = JSON.parse(txt);
+      const merged = { ...invoiceData, ...extracted };
+      AZ.data = merged;
+      renderFields(merged);
+      if (extracted.lineItems?.length) renderLineItems(merged);
+      renderRaw(merged);
+      toast('Fields extracted via Vision OCR', 'ok');
+    }
+  } catch(e) { console.warn('Vision OCR failed:', e); renderFields(invoiceData); }
+}
+
+// ── Collect field values ───────────────────────────────
+function collectFields() {
+  const out = {};
+  document.querySelectorAll('#fieldsContainer input.field-input[id^="fld-"]').forEach(inp => {
+    out[inp.id.slice(4)] = { value: inp.value.trim(), confidence: 1 };
+  });
+  return out;
+}
+
+async function saveEdits() {
+  const id = AZ.data?.id;
+  if (!id) { toast('No invoice loaded', 'warn'); return; }
+  try {
+    const r = await api('POST', `/api/invoices/${id}/feedback`, { correctedBy:'reviewer', notes:'Manual edits', correctedData: collectFields() });
+    if (r.ok) {
+      document.querySelectorAll('.field-input.edited').forEach(i => i.classList.remove('edited'));
+      document.getElementById('editNotice').style.display = 'none';
+      toast('Edits saved', 'ok');
+    } else toast('Save failed: ' + r.status, 'err');
+  } catch(e) { toast('Error: '+e.message, 'err'); }
+}
+
+async function decide(action) {
+  const id  = AZ.data?.id;
+  const bar = document.getElementById('decisionBar');
+  if (!id) { toast('No invoice loaded', 'warn'); return; }
+
+  const cd = collectFields();
+  bar.className = 'status-bar info';
+  bar.style.display = 'block';
+  bar.innerHTML = '<span class="spinner" style="width:13px;height:13px;border-width:2px;"></span>&nbsp;Processing…';
+
+  if (action === 'approve') {
+    await api('POST', `/api/invoices/${id}/feedback`, { correctedBy:'reviewer', notes:'Approved', correctedData: cd }).catch(()=>{});
+    bar.className = 'status-bar ok';
+    bar.innerHTML = '✓ Invoice approved and saved.';
+    toast('Approved', 'ok');
+  } else if (action === 'train') {
+    const annotations = Object.entries(cd).map(([label, v]) => ({ label, value: v.value, sourceType:'field' }));
+    try {
+      const r = await api('POST', `/api/invoices/${id}/training-annotations`, { annotations });
+      bar.className = 'status-bar info';
+      bar.innerHTML = r.ok ? '⚡ Added to training dataset. <a href="dataset.html" style="color:var(--c-blue-dk);font-weight:700;">View Dataset →</a>' : '✗ Train failed: '+r.status;
+      if (r.ok) toast('Sent to training dataset', 'ok'); else toast('Train failed', 'err');
+    } catch(e) { bar.className='status-bar err'; bar.innerHTML='Error: '+e.message; }
+  } else if (action === 'reject') {
+    await api('POST', `/api/invoices/${id}/feedback`, { correctedBy:'reviewer', notes:'Rejected', correctedData: {} }).catch(()=>{});
+    bar.className = 'status-bar err';
+    bar.innerHTML = '✕ Invoice rejected.';
+    toast('Rejected', 'warn');
+  }
+}
+
+function resetPage() {
+  AZ.file = null; AZ.blobUrl = null; AZ.isPdf = false; AZ.pdfDoc = null; AZ.data = null;
+  document.getElementById('uploadState').style.display  = 'block';
+  document.getElementById('resultState').style.display  = 'none';
+  document.getElementById('topbarActions').style.display = 'none';
+  document.getElementById('topbarSub').textContent       = 'Upload a document to extract fields';
+  document.getElementById('btnAnalyze').disabled    = true;
+  document.getElementById('btnAnalyzeVal').disabled = true;
+  document.getElementById('dropTitle').textContent  = 'Drop invoice here or click to upload';
+  document.getElementById('dropSub').textContent    = 'PDF, PNG, JPG, TIFF supported';
+  document.getElementById('fileIn').value = '';
+  document.getElementById('urlIn').value  = '';
+  dz.style.borderColor = '';
+  dz.style.background  = '';
+  document.getElementById('decisionBar').style.display = 'none';
+}
+</script>
+</body>
+</html>

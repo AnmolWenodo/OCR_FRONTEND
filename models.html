@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Models — InvoiceOCR</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="layout">
+<div class="main-content">
+  <div class="topbar">
+    <div><span class="topbar-title">Models</span><span class="topbar-sub">Custom trained document models</span></div>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="loadModels()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+      <a href="training.html" class="btn btn-primary btn-sm">+ Build Model</a>
+    </div>
+  </div>
+  <div class="page-body">
+    <div class="grid-2" style="align-items:start;">
+
+      <!-- Models list -->
+      <div>
+        <div id="modelsList">
+          <div style="padding:16px;display:flex;gap:10px;align-items:center;color:var(--c-ink3);font-size:13px;"><span class="spinner"></span>Loading…</div>
+        </div>
+      </div>
+
+      <!-- Test panel -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink3)" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <div><div class="card-title">Test Model</div><div class="card-subtitle">Run custom model on an invoice</div></div>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Model ID</label>
+              <input class="form-input form-input mono" id="t-mid" placeholder="invoices-v1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Invoice URL</label>
+              <input class="form-input" id="t-url" placeholder="https://example.com/invoice.pdf">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Or upload a file</label>
+              <input type="file" id="t-file" accept=".pdf,.png,.jpg" style="font-size:13px;">
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-primary" onclick="testModel()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run Analysis
+            </button>
+          </div>
+        </div>
+
+        <div class="card" id="testResultCard" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">Test Results</div>
+            <span class="badge badge-green" style="margin-left:auto;">Success</span>
+          </div>
+          <div id="testFields" style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+          <div id="testRaw" style="padding:0 16px 16px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script src="shared.js"></script>
+<script>
+async function loadModels() {
+  const el = document.getElementById('modelsList');
+  el.innerHTML = '<div style="padding:16px;display:flex;gap:10px;align-items:center;color:var(--c-ink3);font-size:13px;"><span class="spinner"></span>Loading…</div>';
+  try {
+    const r = await api('GET', '/api/training/models');
+    if (!r.ok) { el.innerHTML = `<div class="empty-state" style="padding:40px;"><div class="empty-title">Failed: ${r.status}</div></div>`; return; }
+    const d = await r.json();
+    const models = Array.isArray(d) ? d : (d.models||d.items||d.data||[]);
+    if (!models.length) {
+      el.innerHTML = `<div class="empty-state" style="padding:40px;">
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/></svg></div>
+        <div class="empty-title">No models yet</div>
+        <div class="empty-desc">Build a custom model from the Training tab.</div>
+        <a href="training.html" class="btn btn-primary btn-sm" style="margin-top:8px;">Go to Training</a>
+      </div>`;
+      return;
+    }
+    el.innerHTML = models.map(m => {
+      const mid = m.modelId||m.id||'—';
+      const st  = m.status||'unknown';
+      const mode = m.buildMode||m.mode||'—';
+      const created = m.createdAt ? new Date(m.createdAt).toLocaleDateString() : '—';
+      return `<div class="card" style="margin-bottom:12px;">
+        <div style="padding:18px 20px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
+            <div style="width:40px;height:40px;background:var(--c-ink);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21" stroke="white" stroke-width="2"/><line x1="12" y1="17" x2="12" y2="21" stroke="white" stroke-width="2"/></svg>
+            </div>
+            <div style="flex:1;">
+              <div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--c-ink);">${mid}</div>
+              <div style="font-size:12.5px;color:var(--c-ink3);margin-top:2px;">${m.description||'Custom invoice model'}</div>
+            </div>
+            ${statusBadge(st)}
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--c-ink3);">
+            <span>⚡ ${mode} mode</span>
+            <span>📅 ${created}</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--c-border2);">
+            <button class="btn btn-blue btn-sm" onclick="prefillTest('${mid}')">Test Model</button>
+            <button class="btn btn-outline btn-sm" onclick="viewDetail('${mid}')">Details</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    toast(`${models.length} model(s) loaded`, 'ok');
+  } catch(e) { el.innerHTML = `<div class="empty-state" style="padding:40px;"><div class="empty-title">Error: ${e.message}</div></div>`; }
+}
+
+function prefillTest(mid) {
+  document.getElementById('t-mid').value = mid;
+  document.getElementById('t-mid').focus();
+}
+
+async function viewDetail(mid) {
+  try {
+    const r = await api('GET', `/api/training/models/${mid}`);
+    if (!r.ok) { toast('Failed: '+r.status,'err'); return; }
+    const d = await r.json();
+    document.getElementById('testResultCard').style.display = 'block';
+    document.getElementById('testFields').innerHTML = '';
+    document.getElementById('testRaw').innerHTML = `<div class="json-box" style="border-radius:8px;"><div class="json-box-header"><span class="json-box-label">MODEL DETAILS</span></div><div class="json-body">${jsonHL(d)}</div></div>`;
+  } catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function testModel() {
+  const mid  = document.getElementById('t-mid').value.trim();
+  const furl = document.getElementById('t-url').value.trim();
+  const file = document.getElementById('t-file').files[0];
+  if (!mid) { toast('Model ID required','warn'); return; }
+  if (!furl && !file) { toast('Provide a URL or upload a file','warn'); return; }
+
+  document.getElementById('testResultCard').style.display = 'block';
+  document.getElementById('testFields').innerHTML = '<div style="grid-column:span 2;display:flex;gap:10px;align-items:center;padding:8px 0;"><span class="spinner"></span> Analyzing with ' + mid + '…</div>';
+  document.getElementById('testRaw').innerHTML = '';
+
+  try {
+    let res;
+    if (furl) {
+      const fd = new FormData(); fd.append('fileUrl', furl);
+      res = await api('POST', `/api/training/models/${mid}/analyze`, fd, true);
+    } else {
+      const fd = new FormData(); fd.append('file', file);
+      res = await api('POST', `/api/training/models/${mid}/analyze`, fd, true);
+    }
+
+    const d = await res.json().catch(()=>({}));
+    document.getElementById('testRaw').innerHTML = `<div class="json-box" style="border-radius:8px;margin-top:12px;"><div class="json-box-header"><span class="json-box-label">RESPONSE</span></div><div class="json-body">${jsonHL(d)}</div></div>`;
+
+    if (res.ok) {
+      const fields = extractFields(d);
+      const entries = Object.entries(fields);
+      document.getElementById('testFields').innerHTML = entries.length
+        ? entries.map(([k,{value,confidence}]) => `<div style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:10px 12px;">
+            <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--c-ink3);margin-bottom:4px;">${k}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--c-ink);font-family:monospace;">${value||'—'}</div>
+            ${confPill(confidence) ? `<div style="margin-top:2px;">${confPill(confidence)}</div>` : ''}
+          </div>`).join('')
+        : '<div style="grid-column:span 2;color:var(--c-ink3);font-size:13px;">No fields in response.</div>';
+      toast('Analysis complete','ok');
+    } else {
+      document.getElementById('testFields').innerHTML = `<div style="grid-column:span 2;color:var(--c-red);font-size:13px;">Analysis failed: HTTP ${res.status}</div>`;
+      toast('Analysis failed: '+res.status,'err');
+    }
+  } catch(e) {
+    document.getElementById('testFields').innerHTML = `<div style="grid-column:span 2;color:var(--c-red);">Error: ${e.message}</div>`;
+    toast('Error: '+e.message,'err');
+  }
+}
+
+loadModels();
+</script>
+</body>
+</html>
